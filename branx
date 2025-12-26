@@ -1,4 +1,5 @@
-#!/usr/bin/env bash -e
+#!/usr/bin/env bash
+set -e
 
 # Usage: branx clone {repo}
 
@@ -44,7 +45,34 @@ case $command in
 	clone)
 		repo=$(resolve_repo "$1")
 		branch_name=$(random_branch_name)
-		echo $repo $branch_name
+
+		# Validate local directory is a git repo
+		if [[ -d "$repo" ]] && [[ ! -d "$repo/.git" ]]; then
+			echo "Error: $repo is not a git repository"
+			exit 1
+		fi
+
+		# Get repo name (strip .git suffix for remote URLs)
+		repo_name=$(basename "$repo" .git)
+		target_dir="${repo_name}-${branch_name}"
+
+		# 1. Clone
+		git clone "$repo" "$target_dir"
+		cd "$target_dir"
+
+		# 2. If cloned from local dir, preserve only the origin remote
+		if [[ -d "$repo" ]]; then
+			origin_url=$(git -C "$repo" remote get-url origin 2>/dev/null) || true
+			git remote remove origin 2>/dev/null || true
+			if [[ -n "$origin_url" ]]; then
+				git remote add origin "$origin_url"
+			fi
+		fi
+
+		# 3. Switch to new branch
+		git switch -c "$branch_name"
+
+		echo "Cloned $repo to $target_dir on branch $branch_name"
 		;;
 	*)
 		echo "Usage: $0 clone {repo}"
