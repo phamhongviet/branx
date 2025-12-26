@@ -6,14 +6,19 @@ set -e
 # Config
 config_file="$HOME/.config/branx/env"
 declare -A REPOS
+WORK_DIR="${HOME}/.local/share/branx"
 
 # Config file expect this:
 # REPOS[myrepo]="$HOME/code/myrepo/"
 # REPOS[myproject]="https://github.com/myuser/myproject.git"
+# WORK_DIR="$HOME/.local/share/branx"
 
 if [ -e "$config_file" ]; then
 	source $config_file
 fi
+
+# Ensure WORK_DIR exists
+mkdir -p "$WORK_DIR"
 
 # Helper functions
 random_branch_name() {
@@ -54,7 +59,10 @@ case $command in
 
 		# Get repo name (strip .git suffix for remote URLs)
 		repo_name=$(basename "$repo" .git)
-		target_dir="${repo_name}-${branch_name}"
+		target_dir="${WORK_DIR}/${repo_name}/${branch_name}"
+
+		# Ensure WORK_DIR/repo directory exists
+		mkdir -p "${WORK_DIR}/${repo_name}"
 
 		# 1. Clone
 		git clone "$repo" "$target_dir"
