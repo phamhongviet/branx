@@ -68,17 +68,23 @@ case $command in
 		git clone "$repo" "$target_dir"
 		cd "$target_dir"
 
-		# 2. If cloned from local dir, preserve only the origin remote
+		# 2. If cloned from local dir, preserve only the origin remote and sync with it
 		if [[ -d "$repo" ]]; then
 			origin_url=$(git -C "$repo" remote get-url origin 2>/dev/null) || true
 			git remote remove origin 2>/dev/null || true
 			if [[ -n "$origin_url" ]]; then
 				git remote add origin "$origin_url"
+				git fetch origin
+				git remote set-head origin --auto
 			fi
 		fi
 
-		# 3. Switch to new branch
-		git switch -c "$branch_name"
+		# 3. Switch to new branch from origin/HEAD if available, otherwise from current HEAD
+		if git rev-parse --verify origin/HEAD >/dev/null 2>&1; then
+			git switch -c "$branch_name" origin/HEAD
+		else
+			git switch -c "$branch_name"
+		fi
 
 		echo "Cloned $repo to $target_dir"
 		;;
