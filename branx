@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-# Usage: branx clone {repo}
+# Usage: branx clone {repo} [branch]
 
 # Config
 config_file="$HOME/.config/branx/env"
@@ -49,6 +49,7 @@ shift
 case $command in
 	clone)
 		repo=$(resolve_repo "$1")
+		base_branch="${2:-}"
 		branch_name=$(random_branch_name)
 
 		# Validate local directory is a git repo
@@ -79,8 +80,15 @@ case $command in
 			fi
 		fi
 
-		# 3. Switch to new branch from origin/HEAD if available, otherwise from current HEAD
-		if git rev-parse --verify origin/HEAD >/dev/null 2>&1; then
+		# 3. Switch to new branch from origin/{base_branch} or origin/HEAD if available, otherwise from current HEAD
+		if [[ -n "$base_branch" ]]; then
+			if git rev-parse --verify "origin/$base_branch" >/dev/null 2>&1; then
+				git switch -c "$branch_name" "origin/$base_branch"
+			else
+				echo "Error: origin/$base_branch does not exist"
+				exit 1
+			fi
+		elif git rev-parse --verify origin/HEAD >/dev/null 2>&1; then
 			git switch -c "$branch_name" origin/HEAD
 		else
 			git switch -c "$branch_name"
@@ -89,6 +97,6 @@ case $command in
 		echo "Cloned $repo to $target_dir"
 		;;
 	*)
-		echo "Usage: $0 clone {repo}"
+		echo "Usage: $0 clone {repo} [branch]"
 		;;
 esac
