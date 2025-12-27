@@ -7,11 +7,13 @@ set -e
 config_file="$HOME/.config/branx/env"
 declare -A REPOS
 WORK_DIR="${HOME}/.local/share/branx"
+COPY_TO_CLIPBOARD=true
 
 # Config file expect this:
 # REPOS[myrepo]="$HOME/code/myrepo/"
 # REPOS[myproject]="https://github.com/myuser/myproject.git"
 # WORK_DIR="$HOME/.local/share/branx"
+# COPY_TO_CLIPBOARD=true
 
 if [ -e "$config_file" ]; then
 	source $config_file
@@ -21,6 +23,20 @@ fi
 mkdir -p "$WORK_DIR"
 
 # Helper functions
+copy_to_clipboard() {
+	local text="$1"
+	if command -v pbcopy &>/dev/null; then
+		printf '%s' "$text" | pbcopy
+	elif command -v xclip &>/dev/null; then
+		printf '%s' "$text" | xclip -selection clipboard
+	elif command -v xsel &>/dev/null; then
+		printf '%s' "$text" | xsel --clipboard --input
+	else
+		echo "Warning: No clipboard utility found (pbcopy, xclip, or xsel)"
+		return 1
+	fi
+}
+
 random_branch_name() {
 	awk -f - <<'EOF'
 BEGIN {
@@ -95,6 +111,13 @@ case $command in
 		fi
 
 		echo "Cloned $repo to $target_dir"
+
+		# Copy target directory to clipboard if enabled
+		if [[ "$COPY_TO_CLIPBOARD" == true ]]; then
+			if copy_to_clipboard "$target_dir"; then
+				echo "Copied to clipboard: $target_dir"
+			fi
+		fi
 		;;
 	*)
 		echo "Usage: $0 clone {repo} [branch]"
