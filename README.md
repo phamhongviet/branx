@@ -1,10 +1,8 @@
 # branx
 
-A simple bash tool for creating isolated git workspaces with randomly generated branch names.
+A simple bash script that clones a git repository and creates a new branch with a randomly generated plant-based name (like `oak-42`, `bamboo-71`, `jasmine-33`).
 
-## Overview
-
-`branx` clones a git repository into a unique directory and creates a new branch with a randomly generated name (plant-based names like `oak-42`, `bamboo-71`, `jasmine-33`). This is useful for quickly spinning up isolated environments for experiments, features, or reviews without polluting your main working directory.
+The script is short and readable—[take a look](branx).
 
 ## Installation
 
@@ -18,9 +16,10 @@ A simple bash tool for creating isolated git workspaces with randomly generated 
    ```bash
    mkdir -p ~/.config/branx
    cat > ~/.config/branx/env << 'EOF'
+   WORK_DIR="$HOME/workspaces"
+
    REPOS[myrepo]="$HOME/code/myrepo/"
    REPOS[myproject]="https://github.com/myuser/myproject.git"
-   WORK_DIR="$HOME/.local/share/branx"
    EOF
    ```
 
@@ -62,16 +61,6 @@ Clone from a specific base branch:
 branx clone myrepo develop
 # Creates: ~/.local/share/branx/myrepo/maple-56/ branched from origin/develop
 ```
-
-## How It Works
-
-1. Clones the specified repository to `$WORK_DIR/<repo-name>/<random-branch>/`
-2. If cloning from a local directory, reconfigures the origin remote to point to the original upstream
-3. Creates and switches to a new branch with a randomly generated plant-based name
-4. The new branch is based on:
-   - `origin/<branch>` if a base branch is specified
-   - `origin/HEAD` when available (default)
-   - Current HEAD otherwise
 
 ## Configuration
 
