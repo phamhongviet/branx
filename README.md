@@ -27,13 +27,15 @@ A simple bash tool for creating isolated git workspaces with randomly generated 
 ## Usage
 
 ```bash
-branx clone <repo>
+branx clone <repo> [branch]
 ```
 
-Where `<repo>` can be:
-- A local directory path (e.g., `~/projects/myapp`)
-- A remote git URL (e.g., `https://github.com/user/repo.git`)
-- A configured alias from your config file
+Where:
+- `<repo>` can be:
+  - A local directory path (e.g., `~/projects/myapp`)
+  - A remote git URL (e.g., `https://github.com/user/repo.git`)
+  - A configured alias from your config file
+- `[branch]` (optional) specifies the base branch to create your new branch from (e.g., `develop`, `feature/main`)
 
 ### Examples
 
@@ -55,12 +57,21 @@ branx clone myrepo
 # Creates: ~/.local/share/branx/myrepo/basil-85/
 ```
 
+Clone from a specific base branch:
+```bash
+branx clone myrepo develop
+# Creates: ~/.local/share/branx/myrepo/maple-56/ branched from origin/develop
+```
+
 ## How It Works
 
 1. Clones the specified repository to `$WORK_DIR/<repo-name>/<random-branch>/`
 2. If cloning from a local directory, reconfigures the origin remote to point to the original upstream
 3. Creates and switches to a new branch with a randomly generated plant-based name
-4. The new branch is based on `origin/HEAD` when available
+4. The new branch is based on:
+   - `origin/<branch>` if a base branch is specified
+   - `origin/HEAD` when available (default)
+   - Current HEAD otherwise
 
 ## Configuration
 
