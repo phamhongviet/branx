@@ -68,20 +68,11 @@ case $command in
 		base_branch="${2:-}"
 		branch_name=$(random_branch_name)
 
-		# Validate local directory is a git repo
-		if [[ -d "$repo" ]] && [[ ! -d "$repo/.git" ]]; then
-			echo "Error: $repo is not a git repository"
-			exit 1
-		fi
-
 		# Get repo name (strip .git suffix for remote URLs)
 		repo_name=$(basename "$repo" .git)
 		target_dir="${WORK_DIR}/${repo_name}/${branch_name}"
 
-		# Ensure WORK_DIR/repo directory exists
 		mkdir -p "${WORK_DIR}/${repo_name}"
-
-		# 1. Clone
 		git clone "$repo" "$target_dir"
 		cd "$target_dir"
 
