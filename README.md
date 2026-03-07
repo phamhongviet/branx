@@ -1,6 +1,6 @@
 # branx
 
-A simple bash script that clones a git repository and creates a new branch with a randomly generated plant-based name (like `oak-42`, `bamboo-71`, `jasmine-33`).
+A simple bash script that clones a git repository and creates a new branch with a randomly generated plant-based name (like `oak-mint`, `bamboo-sage`, `jasmine-thyme`).
 
 The script is short and readable—[take a look](branx).
 
@@ -27,6 +27,7 @@ The script is short and readable—[take a look](branx).
 
 ```bash
 branx clone <repo> [branch]
+branx random
 ```
 
 Where:
@@ -38,28 +39,34 @@ Where:
 
 ### Examples
 
+Generate a random branch name only:
+```bash
+branx random
+# Prints: oak-mint
+```
+
 Clone from a remote repository:
 ```bash
 branx clone https://github.com/user/project.git
-# Creates: ~/.local/share/branx/project/fern-47/
+# Creates: ~/.local/share/branx/project/fern-sage/
 ```
 
 Clone from a local directory:
 ```bash
 branx clone ~/code/myproject
-# Creates: ~/.local/share/branx/myproject/willow-23/
+# Creates: ~/.local/share/branx/myproject/willow-thyme/
 ```
 
 Clone using a configured alias:
 ```bash
 branx clone myrepo
-# Creates: ~/.local/share/branx/myrepo/basil-85/
+# Creates: ~/.local/share/branx/myrepo/basil-cedar/
 ```
 
 Clone from a specific base branch:
 ```bash
 branx clone myrepo develop
-# Creates: ~/.local/share/branx/myrepo/maple-56/ branched from origin/develop
+# Creates: ~/.local/share/branx/myrepo/maple-olive/ branched from origin/develop
 ```
 
 ## Configuration

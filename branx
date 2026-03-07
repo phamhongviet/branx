@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
-# Usage: branx clone {repo} [branch]
+# Usage:
+#   branx clone {repo} [branch]
+#   branx random
 
 # Config
 config_file="$HOME/.config/branx/env"
@@ -16,13 +18,16 @@ COPY_TO_CLIPBOARD=true
 # COPY_TO_CLIPBOARD=true
 
 if [ -e "$config_file" ]; then
-	source $config_file
+	# shellcheck source=/dev/null
+	source "$config_file"
 fi
 
-# Ensure WORK_DIR exists
-mkdir -p "$WORK_DIR"
-
 # Helper functions
+usage() {
+	echo "Usage:"
+	echo "  $0 clone {repo} [branch]"
+	echo "  $0 random"
+}
 copy_to_clipboard() {
 	local text="$1"
 	if command -v pbcopy &>/dev/null; then
@@ -59,14 +64,19 @@ resolve_repo() {
 }
 
 # Main
-command=$1
-shift
+subcommand="${1:-}"
+if (($# > 0)); then
+	shift
+fi
 
-case $command in
+case "$subcommand" in
 	clone)
 		repo=$(resolve_repo "$1")
 		base_branch="${2:-}"
 		branch_name=$(random_branch_name)
+
+		# Ensure WORK_DIR exists only when cloning
+		mkdir -p "$WORK_DIR"
 
 		# Get repo name (strip .git suffix for remote URLs)
 		repo_name=$(basename "$repo" .git)
@@ -110,7 +120,11 @@ case $command in
 			fi
 		fi
 		;;
+	random)
+		random_branch_name
+		;;
 	*)
-		echo "Usage: $0 clone {repo} [branch]"
+		usage
+		exit 1
 		;;
 esac
