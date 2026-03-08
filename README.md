@@ -39,7 +39,7 @@ The script is short and readable—[take a look](branx).
 ## Usage
 
 ```bash
-branx clone <repo> [branch]
+branx clone <repo> [--source-branch <branch>] [--target-dir <dir>] [--target-branch <branch>]
 branx random
 ```
 
@@ -48,7 +48,9 @@ Where:
   - A local directory path (e.g., `~/projects/myapp`)
   - A remote git URL (e.g., `https://github.com/user/repo.git`)
   - A configured alias from your config file
-- `[branch]` (optional) specifies the base branch to create your new branch from (e.g., `develop`, `feature/main`)
+- `--source-branch <branch>` (optional) specifies the base branch to create your new branch from (e.g., `develop`, `feature/main`)
+- `--target-branch <branch>` (optional) sets the name of the new branch in the cloned repo. If omitted, `branx` generates a random plant-based name.
+- `--target-dir <dir>` (optional) overrides the default clone destination. If omitted, `branx` uses `<WORK_DIR>/<repo>/<target-branch>`.
 
 ### Examples
 
@@ -78,8 +80,20 @@ branx clone myrepo
 
 Clone from a specific base branch:
 ```bash
-branx clone myrepo develop
+branx clone myrepo --source-branch develop
 # Creates: ~/.local/share/branx/myrepo/maple-olive/ branched from origin/develop
+```
+
+Clone with an explicit target branch:
+```bash
+branx clone myrepo --source-branch develop --target-branch feature-api
+# Creates: ~/.local/share/branx/myrepo/feature-api/ branched from origin/develop
+```
+
+Clone to a custom directory:
+```bash
+branx clone myrepo --target-dir ~/tmp/myrepo-scratch --target-branch scratch
+# Creates: ~/tmp/myrepo-scratch
 ```
 
 ## Configuration

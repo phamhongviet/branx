@@ -2,7 +2,7 @@
 set -e
 
 # Usage:
-#   branx clone {repo} [branch]
+#   branx clone <repo> [--source-branch BRANCH] [--target-dir DIR] [--target-branch BRANCH]
 #   branx random
 
 # Config
@@ -50,9 +50,16 @@ fi
 # Helper functions
 usage() {
 	echo "Usage:"
-	echo "  $0 clone {repo} [branch]"
+	echo "  $0 clone <repo> [--source-branch <branch>] [--target-dir <dir>] [--target-branch <branch>]"
 	echo "  $0 random"
 }
+
+usage_error() {
+	echo "Error: $1" >&2
+	usage >&2
+	exit 1
+}
+
 copy_to_clipboard() {
 	local text="$1"
 	if command -v pbcopy &>/dev/null; then
@@ -103,6 +110,109 @@ select_work_dir_root() {
 	echo "$WORK_DIR"
 }
 
+parse_clone_args() {
+	clone_repo_arg=""
+	source_branch=""
+	requested_target_dir=""
+	target_branch=""
+
+	while (($# > 0)); do
+		case "$1" in
+			-s|--source-branch|--source-repo-branch)
+				if (($# < 2)); then
+					usage_error "$1 requires a value"
+				fi
+				source_branch="$2"
+				shift 2
+				;;
+			-d|--target-dir)
+				if (($# < 2)); then
+					usage_error "$1 requires a value"
+				fi
+				requested_target_dir="$2"
+				shift 2
+				;;
+			-t|--target-branch|--target-repo-branch)
+				if (($# < 2)); then
+					usage_error "$1 requires a value"
+				fi
+				target_branch="$2"
+				shift 2
+				;;
+			-h|--help)
+				usage
+				exit 0
+				;;
+			--)
+				shift
+				while (($# > 0)); do
+					if [[ -z "$clone_repo_arg" ]]; then
+						clone_repo_arg="$1"
+					else
+						usage_error "unexpected positional argument: $1"
+					fi
+					shift
+				done
+				;;
+			-*)
+				usage_error "unknown option: $1"
+				;;
+			*)
+				if [[ -z "$clone_repo_arg" ]]; then
+					clone_repo_arg="$1"
+				else
+					usage_error "unexpected positional argument: $1"
+				fi
+				shift
+				;;
+		esac
+	done
+
+	if [[ -z "$clone_repo_arg" ]]; then
+		usage_error "repo is required"
+	fi
+
+	if [[ -z "$target_branch" ]]; then
+		target_branch=$(random_branch_name)
+	fi
+}
+
+resolve_origin_head_ref() {
+	git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true
+}
+
+switch_to_target_branch() {
+	local desired_branch="$1"
+	local start_point="$2"
+	local upstream_ref="$3"
+	local current_branch
+
+	current_branch=$(git branch --show-current)
+
+	if git show-ref --verify --quiet "refs/heads/$desired_branch"; then
+		if [[ "$current_branch" == "$desired_branch" ]]; then
+			if [[ -n "$start_point" ]]; then
+				git reset --hard "$start_point" >/dev/null
+			fi
+		else
+			if [[ -n "$start_point" ]]; then
+				git branch -f "$desired_branch" "$start_point" >/dev/null
+			fi
+			git switch "$desired_branch" >/dev/null
+		fi
+	else
+		if [[ -n "$start_point" ]]; then
+			git switch -c "$desired_branch" "$start_point" >/dev/null
+		else
+			git switch -c "$desired_branch" >/dev/null
+		fi
+	fi
+
+	if [[ -n "$upstream_ref" ]]; then
+		git branch --set-upstream-to="$upstream_ref" "$desired_branch" >/dev/null 2>&1 || true
+	fi
+}
+
 # Main
 subcommand="${1:-}"
 if (($# > 0)); then
@@ -111,23 +221,22 @@ fi
 
 case "$subcommand" in
 	clone)
-		repo=$(resolve_repo "$1")
-		base_branch="${2:-}"
-		branch_name=$(random_branch_name)
-		work_dir_root=$(select_work_dir_root "$repo")
+		parse_clone_args "$@"
 
-		# Ensure target workspace exists only when cloning
-		mkdir -p "$work_dir_root"
-
-		# Get repo name (strip .git suffix for remote URLs)
+		repo=$(resolve_repo "$clone_repo_arg")
 		repo_name=$(basename "$repo" .git)
-		target_dir="${work_dir_root}/${repo_name}/${branch_name}"
+		if [[ -n "$requested_target_dir" ]]; then
+			target_dir="$requested_target_dir"
+		else
+			work_dir_root=$(select_work_dir_root "$repo")
+			target_dir="${work_dir_root}/${repo_name}/${target_branch}"
+		fi
 
-		mkdir -p "${work_dir_root}/${repo_name}"
+		mkdir -p "$(dirname "$target_dir")"
 		git clone "$repo" "$target_dir"
 		cd "$target_dir"
 
-		# 2. If cloned from local dir, preserve only the origin remote and sync with it
+		# If cloned from a local dir, preserve only the source repo's origin remote and sync with it.
 		if [[ -d "$repo" ]]; then
 			origin_url=$(git -C "$repo" remote get-url origin 2>/dev/null) || true
 			git remote remove origin 2>/dev/null || true
@@ -138,19 +247,22 @@ case "$subcommand" in
 			fi
 		fi
 
-		# 3. Switch to new branch from origin/{base_branch} or origin/HEAD if available, otherwise from current HEAD
-		if [[ -n "$base_branch" ]]; then
-			if git rev-parse --verify "origin/$base_branch" >/dev/null 2>&1; then
-				git switch -c "$branch_name" "origin/$base_branch"
+		start_point=""
+		upstream_ref=""
+		if [[ -n "$source_branch" ]]; then
+			if git rev-parse --verify "origin/$source_branch" >/dev/null 2>&1; then
+				start_point="origin/$source_branch"
+				upstream_ref="origin/$source_branch"
 			else
-				echo "Error: origin/$base_branch does not exist"
+				echo "Error: origin/$source_branch does not exist" >&2
 				exit 1
 			fi
 		elif git rev-parse --verify origin/HEAD >/dev/null 2>&1; then
-			git switch -c "$branch_name" origin/HEAD
-		else
-			git switch -c "$branch_name"
+			start_point="origin/HEAD"
+			upstream_ref=$(resolve_origin_head_ref)
 		fi
+
+		switch_to_target_branch "$target_branch" "$start_point" "$upstream_ref"
 
 		echo "Cloned $repo to $target_dir"
 
