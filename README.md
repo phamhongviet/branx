@@ -18,6 +18,9 @@ The script is short and readable—[take a look](branx).
    cat > ~/.config/branx/env << 'EOF'
    WORK_DIR="$HOME/workspaces"
 
+   work_dir_rule "/Codes/org-1/*" "/WorkSpaces/org-1"
+   work_dir_rule "/Codes/org-2/*" "/WorkSpaces/org-2"
+
    REPOS[myrepo]="$HOME/code/myrepo/"
    REPOS[myproject]="https://github.com/myuser/myproject.git"
    EOF
@@ -85,8 +88,26 @@ Create `~/.config/branx/env` to customize behavior:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `WORK_DIR` | Base directory for cloned workspaces | `~/.local/share/branx` |
+| `WORK_DIR` | Base directory for cloned workspaces when no rule matches | `~/.local/share/branx` |
 | `REPOS[name]` | Repository aliases for quick access | (none) |
+
+You can also declare ordered workspace routing rules in the config file:
+
+```bash
+work_dir_rule "/Codes/org-1/*" "/WorkSpaces/org-1"
+work_dir_rule "/Codes/org-2/*" "/WorkSpaces/org-2"
+work_dir_rule "/Codes/org-3/*" "/Work-for-org-3"
+```
+
+Rules are evaluated in declaration order against the resolved repo value after
+`REPOS[...]` alias expansion. The first match wins. If no rule matches, `branx`
+uses `WORK_DIR`.
+
+For example:
+
+- `/Codes/org-1/infra` → `/WorkSpaces/org-1/infra/<branch>`
+- `/Codes/org-2/infra` → `/WorkSpaces/org-2/infra/<branch>`
+- `/Codes/org-3/guardrails` → `/Work-for-org-3/guardrails/<branch>`
 
 ## License
 

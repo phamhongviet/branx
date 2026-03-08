@@ -16,14 +16,24 @@ else
 fi
 
 declare -A REPOS
+declare -a WORK_DIR_RULE_PATTERNS=()
+declare -a WORK_DIR_RULE_TARGETS=()
 WORK_DIR="${HOME}/.local/share/branx"
 COPY_TO_CLIPBOARD=true
+
+work_dir_rule() {
+	local pattern="$1"
+	local target="$2"
+	WORK_DIR_RULE_PATTERNS+=("$pattern")
+	WORK_DIR_RULE_TARGETS+=("$target")
+}
 
 # Config file expect this:
 # REPOS[myrepo]="$HOME/code/myrepo/"
 # REPOS[myproject]="https://github.com/myuser/myproject.git"
 # WORK_DIR="$HOME/.local/share/branx"
 # COPY_TO_CLIPBOARD=true
+# work_dir_rule "/Codes/org-1/*" "/WorkSpaces/org-1"
 
 if [[ -e "$config_file" ]]; then
 	if [[ ! -r "$config_file" ]]; then
@@ -78,6 +88,21 @@ resolve_repo() {
 	fi
 }
 
+select_work_dir_root() {
+	local resolved_repo="$1"
+	local i
+	local pattern
+	for i in "${!WORK_DIR_RULE_PATTERNS[@]}"; do
+		pattern="${WORK_DIR_RULE_PATTERNS[$i]}"
+		# shellcheck disable=SC2053
+		if [[ "$resolved_repo" == $pattern ]]; then
+			echo "${WORK_DIR_RULE_TARGETS[$i]}"
+			return 0
+		fi
+	done
+	echo "$WORK_DIR"
+}
+
 # Main
 subcommand="${1:-}"
 if (($# > 0)); then
@@ -89,15 +114,16 @@ case "$subcommand" in
 		repo=$(resolve_repo "$1")
 		base_branch="${2:-}"
 		branch_name=$(random_branch_name)
+		work_dir_root=$(select_work_dir_root "$repo")
 
-		# Ensure WORK_DIR exists only when cloning
-		mkdir -p "$WORK_DIR"
+		# Ensure target workspace exists only when cloning
+		mkdir -p "$work_dir_root"
 
 		# Get repo name (strip .git suffix for remote URLs)
 		repo_name=$(basename "$repo" .git)
-		target_dir="${WORK_DIR}/${repo_name}/${branch_name}"
+		target_dir="${work_dir_root}/${repo_name}/${branch_name}"
 
-		mkdir -p "${WORK_DIR}/${repo_name}"
+		mkdir -p "${work_dir_root}/${repo_name}"
 		git clone "$repo" "$target_dir"
 		cd "$target_dir"
 
