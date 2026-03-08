@@ -103,7 +103,16 @@ Create `~/.config/branx/env` to customize behavior:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `WORK_DIR` | Base directory for cloned workspaces when no rule matches | `~/.local/share/branx` |
+| `GIT_FETCH` | Whether to run `git fetch origin` after cloning from a local repo path that has an upstream `origin` remote | `true` |
 | `REPOS[name]` | Repository aliases for quick access | (none) |
+
+To skip the fetch step for local clones, set:
+
+```bash
+GIT_FETCH=false
+```
+
+When disabled, `branx` still repoints `origin` to the source repository's upstream URL, but it creates the new branch from the already-available `origin/...` refs in the local source clone.
 
 You can also declare ordered workspace routing rules in the config file:
 

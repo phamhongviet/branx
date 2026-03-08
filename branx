@@ -20,6 +20,7 @@ declare -a WORK_DIR_RULE_PATTERNS=()
 declare -a WORK_DIR_RULE_TARGETS=()
 WORK_DIR="${HOME}/.local/share/branx"
 COPY_TO_CLIPBOARD=true
+GIT_FETCH=true
 
 work_dir_rule() {
 	local pattern="$1"
@@ -33,6 +34,7 @@ work_dir_rule() {
 # REPOS[myproject]="https://github.com/myuser/myproject.git"
 # WORK_DIR="$HOME/.local/share/branx"
 # COPY_TO_CLIPBOARD=true
+# GIT_FETCH=true
 # work_dir_rule "/Codes/org-1/*" "/WorkSpaces/org-1"
 
 if [[ -e "$config_file" ]]; then
@@ -178,7 +180,27 @@ parse_clone_args() {
 }
 
 resolve_origin_head_ref() {
-	git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true
+	local repo_dir="${1:-.}"
+	git -C "$repo_dir" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true
+}
+
+set_branch_upstream() {
+	local desired_branch="$1"
+	local upstream_ref="$2"
+
+	if [[ -z "$upstream_ref" ]]; then
+		return 0
+	fi
+
+	if git rev-parse --verify "$upstream_ref" >/dev/null 2>&1; then
+		git branch --set-upstream-to="$upstream_ref" "$desired_branch" >/dev/null 2>&1 || true
+		return 0
+	fi
+
+	if [[ "$upstream_ref" == origin/* ]]; then
+		git config "branch.$desired_branch.remote" origin
+		git config "branch.$desired_branch.merge" "refs/heads/${upstream_ref#origin/}"
+	fi
 }
 
 switch_to_target_branch() {
@@ -208,9 +230,7 @@ switch_to_target_branch() {
 		fi
 	fi
 
-	if [[ -n "$upstream_ref" ]]; then
-		git branch --set-upstream-to="$upstream_ref" "$desired_branch" >/dev/null 2>&1 || true
-	fi
+	set_branch_upstream "$desired_branch" "$upstream_ref"
 }
 
 # Main
@@ -236,14 +256,30 @@ case "$subcommand" in
 		git clone "$repo" "$target_dir"
 		cd "$target_dir"
 
-		# If cloned from a local dir, preserve only the source repo's origin remote and sync with it.
+		# If cloned from a local dir, preserve only the source repo's origin remote.
+		# Fetch it by default so origin/* refs are refreshed before branching.
+		cached_origin_base_commit=""
+		cached_origin_head_commit=""
+		cached_origin_head_ref=""
 		if [[ -d "$repo" ]]; then
 			origin_url=$(git -C "$repo" remote get-url origin 2>/dev/null) || true
+			if [[ -n "$origin_url" && "$GIT_FETCH" != true ]]; then
+				if [[ -n "$source_branch" ]] && git -C "$repo" rev-parse --verify "origin/$source_branch" >/dev/null 2>&1; then
+					cached_origin_base_commit=$(git -C "$repo" rev-parse --verify "origin/$source_branch^{commit}")
+				fi
+				if git -C "$repo" rev-parse --verify origin/HEAD >/dev/null 2>&1; then
+					cached_origin_head_commit=$(git -C "$repo" rev-parse --verify "origin/HEAD^{commit}")
+					cached_origin_head_ref=$(resolve_origin_head_ref "$repo")
+				fi
+			fi
+
 			git remote remove origin 2>/dev/null || true
 			if [[ -n "$origin_url" ]]; then
 				git remote add origin "$origin_url"
-				git fetch origin
-				git remote set-head origin --auto
+				if [[ "$GIT_FETCH" == true ]]; then
+					git fetch origin
+					git remote set-head origin --auto
+				fi
 			fi
 		fi
 
@@ -253,6 +289,9 @@ case "$subcommand" in
 			if git rev-parse --verify "origin/$source_branch" >/dev/null 2>&1; then
 				start_point="origin/$source_branch"
 				upstream_ref="origin/$source_branch"
+			elif [[ -n "$cached_origin_base_commit" ]]; then
+				start_point="$cached_origin_base_commit"
+				upstream_ref="origin/$source_branch"
 			else
 				echo "Error: origin/$source_branch does not exist" >&2
 				exit 1
@@ -260,6 +299,9 @@ case "$subcommand" in
 		elif git rev-parse --verify origin/HEAD >/dev/null 2>&1; then
 			start_point="origin/HEAD"
 			upstream_ref=$(resolve_origin_head_ref)
+		elif [[ -n "$cached_origin_head_commit" ]]; then
+			start_point="$cached_origin_head_commit"
+			upstream_ref="$cached_origin_head_ref"
 		fi
 
 		switch_to_target_branch "$target_branch" "$start_point" "$upstream_ref"

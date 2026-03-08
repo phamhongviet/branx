@@ -21,6 +21,15 @@ assert_eq() {
 	fi
 }
 
+assert_ne() {
+	local unexpected="$1"
+	local actual="$2"
+	local message="$3"
+	if [[ "$actual" == "$unexpected" ]]; then
+		fail "$message: did not expect '$unexpected'"
+	fi
+}
+
 assert_contains() {
 	local haystack="$1"
 	local needle="$2"
@@ -35,6 +44,17 @@ assert_path_exists() {
 	local message="$2"
 	if [[ ! -e "$path" ]]; then
 		fail "$message: missing '$path'"
+	fi
+}
+
+write_config() {
+	cat > "$config_file" <<EOF
+WORK_DIR="$work_dir"
+COPY_TO_CLIPBOARD=false
+EOF
+
+	if (($# > 0)); then
+		printf 'GIT_FETCH=%s\n' "$1" >> "$config_file"
 	fi
 }
 
@@ -70,10 +90,7 @@ git -C "$seed_repo" checkout main >/dev/null 2>&1
 
 git clone "$upstream_repo" "$source_repo" >/dev/null 2>&1
 
-cat > "$config_file" <<EOF
-WORK_DIR="$work_dir"
-COPY_TO_CLIPBOARD=false
-EOF
+write_config
 
 # clone with switches, source branch, and a target branch containing a slash
 default_target_dir="$work_dir/$(basename "$source_repo")/feature/from-develop"
@@ -113,4 +130,58 @@ fi
 assert_contains "$legacy_output" "Error: unexpected positional argument: develop" "legacy positional syntax error"
 assert_contains "$legacy_output" "clone <repo> [--source-branch <branch>] [--target-dir <dir>] [--target-branch <branch>]" "legacy positional syntax usage"
 
-echo "PASS: clone switch parsing and branch handling"
+# advance upstream after source_repo was cloned so source_repo's origin refs stay stale
+git -C "$seed_repo" checkout develop >/dev/null 2>&1
+printf 'develop v2\n' > "$seed_repo/README.md"
+git -C "$seed_repo" commit -am 'Advance develop upstream' >/dev/null
+git -C "$seed_repo" push origin develop >/dev/null 2>&1
+git -C "$seed_repo" checkout main >/dev/null 2>&1
+printf 'main v2\n' > "$seed_repo/README.md"
+git -C "$seed_repo" commit -am 'Advance main upstream' >/dev/null
+git -C "$seed_repo" push origin main >/dev/null 2>&1
+
+stale_develop_commit=$(git -C "$source_repo" rev-parse origin/develop)
+stale_main_commit=$(git -C "$source_repo" rev-parse origin/main)
+fresh_develop_commit=$(git --git-dir="$upstream_repo" rev-parse refs/heads/develop)
+fresh_main_commit=$(git --git-dir="$upstream_repo" rev-parse refs/heads/main)
+assert_ne "$stale_develop_commit" "$fresh_develop_commit" "stale develop ref check"
+assert_ne "$stale_main_commit" "$fresh_main_commit" "stale main ref check"
+
+# default GIT_FETCH=true should fetch updated upstream refs before branching
+write_config
+with_fetch_target_dir="$temp_dir/with-fetch-target"
+with_fetch_output=$(run_branx clone "$source_repo" --source-branch develop --target-dir "$with_fetch_target_dir" --target-branch feature/with-fetch)
+assert_contains "$with_fetch_output" "Cloned $source_repo to $with_fetch_target_dir" "with fetch output"
+assert_path_exists "$with_fetch_target_dir/.git" "with fetch target dir"
+assert_eq "feature/with-fetch" "$(git -C "$with_fetch_target_dir" branch --show-current)" "with fetch target branch"
+assert_eq "$fresh_develop_commit" "$(git -C "$with_fetch_target_dir" rev-parse HEAD)" "with fetch HEAD"
+assert_eq "$upstream_repo" "$(git -C "$with_fetch_target_dir" remote get-url origin)" "with fetch origin remote"
+assert_eq "origin" "$(git -C "$with_fetch_target_dir" config --get 'branch.feature/with-fetch.remote')" "with fetch upstream remote"
+assert_eq "refs/heads/develop" "$(git -C "$with_fetch_target_dir" config --get 'branch.feature/with-fetch.merge')" "with fetch upstream merge"
+
+# GIT_FETCH=false should skip fetching and branch from cached source refs
+write_config false
+no_fetch_target_dir="$temp_dir/no-fetch-target"
+no_fetch_output=$(run_branx clone "$source_repo" --source-branch develop --target-dir "$no_fetch_target_dir" --target-branch feature/no-fetch)
+assert_contains "$no_fetch_output" "Cloned $source_repo to $no_fetch_target_dir" "no fetch output"
+assert_path_exists "$no_fetch_target_dir/.git" "no fetch target dir"
+assert_eq "feature/no-fetch" "$(git -C "$no_fetch_target_dir" branch --show-current)" "no fetch target branch"
+assert_eq "$stale_develop_commit" "$(git -C "$no_fetch_target_dir" rev-parse HEAD)" "no fetch HEAD"
+assert_ne "$fresh_develop_commit" "$(git -C "$no_fetch_target_dir" rev-parse HEAD)" "no fetch should avoid refreshed develop ref"
+assert_eq "$upstream_repo" "$(git -C "$no_fetch_target_dir" remote get-url origin)" "no fetch origin remote"
+assert_eq "origin" "$(git -C "$no_fetch_target_dir" config --get 'branch.feature/no-fetch.remote')" "no fetch upstream remote"
+assert_eq "refs/heads/develop" "$(git -C "$no_fetch_target_dir" config --get 'branch.feature/no-fetch.merge')" "no fetch upstream merge"
+
+# GIT_FETCH=false should also reuse cached origin/HEAD for the default branch
+no_fetch_main_target_dir="$temp_dir/no-fetch-main-target"
+no_fetch_main_output=$(run_branx clone "$source_repo" --target-dir "$no_fetch_main_target_dir" --target-branch main)
+assert_contains "$no_fetch_main_output" "Cloned $source_repo to $no_fetch_main_target_dir" "no fetch main output"
+assert_path_exists "$no_fetch_main_target_dir/.git" "no fetch main target dir"
+assert_eq "main" "$(git -C "$no_fetch_main_target_dir" branch --show-current)" "no fetch main target branch"
+assert_eq "$stale_main_commit" "$(git -C "$no_fetch_main_target_dir" rev-parse HEAD)" "no fetch main HEAD"
+assert_ne "$fresh_main_commit" "$(git -C "$no_fetch_main_target_dir" rev-parse HEAD)" "no fetch should avoid refreshed main ref"
+assert_eq "$upstream_repo" "$(git -C "$no_fetch_main_target_dir" remote get-url origin)" "no fetch main origin remote"
+assert_eq "origin" "$(git -C "$no_fetch_main_target_dir" config --get 'branch.main.remote')" "no fetch main upstream remote"
+assert_eq "refs/heads/main" "$(git -C "$no_fetch_main_target_dir" config --get 'branch.main.merge')" "no fetch main upstream merge"
+
+echo "PASS: clone switch parsing, branch handling, and optional fetch"
