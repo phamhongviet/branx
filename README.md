@@ -23,6 +23,16 @@ The script is short and readable—[take a look](branx).
    EOF
    ```
 
+   By default, `branx` loads `~/.config/branx/env` if it exists. You can override
+   the config path by setting `BRANX_CONFIG_FILE` before running `branx`:
+   ```bash
+   BRANX_CONFIG_FILE=/etc/branx/env branx clone myrepo
+   ```
+
+   If `BRANX_CONFIG_FILE` is set, the file must exist and be readable or `branx`
+   exits with an error. If the default config file is missing, `branx` continues
+   with built-in defaults.
+
 ## Usage
 
 ```bash

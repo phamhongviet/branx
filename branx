@@ -6,7 +6,15 @@ set -e
 #   branx random
 
 # Config
-config_file="$HOME/.config/branx/env"
+default_config_file="$HOME/.config/branx/env"
+config_required=false
+if [[ -v BRANX_CONFIG_FILE ]]; then
+	config_file="$BRANX_CONFIG_FILE"
+	config_required=true
+else
+	config_file="$default_config_file"
+fi
+
 declare -A REPOS
 WORK_DIR="${HOME}/.local/share/branx"
 COPY_TO_CLIPBOARD=true
@@ -17,9 +25,16 @@ COPY_TO_CLIPBOARD=true
 # WORK_DIR="$HOME/.local/share/branx"
 # COPY_TO_CLIPBOARD=true
 
-if [ -e "$config_file" ]; then
+if [[ -e "$config_file" ]]; then
+	if [[ ! -r "$config_file" ]]; then
+		echo "Error: config file is not readable: $config_file" >&2
+		exit 1
+	fi
 	# shellcheck source=/dev/null
 	source "$config_file"
+elif [[ "$config_required" == true ]]; then
+	echo "Error: BRANX_CONFIG_FILE is set but file is missing: $config_file" >&2
+	exit 1
 fi
 
 # Helper functions
